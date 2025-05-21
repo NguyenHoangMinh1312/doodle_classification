@@ -46,6 +46,7 @@ pip install scikit-learn
 6. Install pygame (if not already installed):
 ```
 pip install pygame
+```
 
 7. Run `train.py` to train the model. You can modify hyperparameters in the `get_args()` function..
 8. Run `main.py` and enjoy the game!.
