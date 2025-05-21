@@ -2,3 +2,4 @@
 /tensorboard
 /__pycache__
 /ML.py
+/model.py
