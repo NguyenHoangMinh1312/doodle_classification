@@ -4,7 +4,7 @@ from argparse import ArgumentParser
 import torch
 import os
 from torch.utils.data import DataLoader
-from torchvision.models import mobilenet_v3_large, mobilenet_v3_small, MobileNet_V3_Large_Weights, MobileNet_V3_Small_Weights, resnet18, ResNet18_Weights
+from torchvision.models import resnet18, ResNet18_Weights
 import torch.nn as nn
 from tqdm import tqdm
 from torch.utils.tensorboard import SummaryWriter
@@ -98,11 +98,6 @@ def train(args):
                              shuffle = False,
                              drop_last = False,
                              num_workers = 8)
-
-    #set up model, change the first and last layer to fit the dataset
-    # model = mobilenet_v3_small(weights=MobileNet_V3_Small_Weights.IMAGENET1K_V1)    
-    # model.features[0][0] = nn.Conv2d(1, 16, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False)
-    # model.classifier[3] = nn.Linear(in_features=1024, out_features = len(train_set.classes), bias=True)
 
     model = resnet18(weights=ResNet18_Weights.IMAGENET1K_V1)
     model.conv1 = nn.Conv2d(1, 64, kernel_size=(7, 7), stride=(2, 2), padding=(3, 3), bias=False)

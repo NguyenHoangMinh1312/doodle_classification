@@ -2,7 +2,6 @@ import re
 import os
 import numpy as np
 from torch.utils.data import Dataset
-import torchvision.transforms as T
 import cv2
 import torch
 
