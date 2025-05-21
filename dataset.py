@@ -5,7 +5,7 @@ from torch.utils.data import Dataset
 import cv2
 import torch
 
-class HandDrawing(Dataset): 
+class Doodle(Dataset): 
     def __init__(self, root_path, image_to_take_ratio = 0.3, split_ratio = 0.8, mode = "train"):
         self.root_path = root_path
         self.classes = []
@@ -75,7 +75,7 @@ class HandDrawing(Dataset):
         
 
 if __name__ == "__main__":
-    dataset = HandDrawing(root_path = "./datasets/doodles", mode = "train")
+    dataset = Doodle(root_path = "./datasets/doodles", mode = "train")
     print(f"Dataset size: {len(dataset)}")
     print(f"Classes: {dataset.classes}")
     

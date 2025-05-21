@@ -1,5 +1,5 @@
 """This script is to train the doodle classification model"""
-from dataset import HandDrawing
+from dataset import Doodle
 from argparse import ArgumentParser
 import torch
 import os
@@ -80,7 +80,7 @@ def train(args):
     writer = SummaryWriter(args.log_path)
     
     #preprocess the data
-    train_set = HandDrawing(root_path = args.data_path,
+    train_set = Doodle(root_path = args.data_path,
                             mode = "train",
                             split_ratio = args.split_ratio,
                             image_to_take_ratio= args.image_to_take_ratio)
@@ -89,7 +89,7 @@ def train(args):
                               shuffle = True,
                               drop_last = True,
                               num_workers = 8)
-    test_set = HandDrawing(root_path = args.data_path,
+    test_set = Doodle(root_path = args.data_path,
                             mode = "test",
                             split_ratio = args.split_ratio,
                             image_to_take_ratio= args.image_to_take_ratio)
