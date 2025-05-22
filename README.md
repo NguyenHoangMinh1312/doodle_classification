@@ -2,7 +2,7 @@
 Identify Hand-Drawn Illustrations
 
 ## Description
-- We fine-tune a CNN model (ResNet18) to recognize hand-drawn grayscale images.
+- We build a CNN model to recognize hand-drawn grayscale images.
 - The dataset is sourced from Google's Quick, Draw! project.
 - For simplicity, we use only 20 classes for training.
 
