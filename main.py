@@ -8,6 +8,7 @@ import numpy as np
 import cv2
 from model import DoodleCNN
 import time
+from inference import DoodleInferencer
 
 class QuickDrawGame:
     def __init__(self, model_path, window_size=(800, 600)):
@@ -58,34 +59,17 @@ class QuickDrawGame:
         self.countdown = 3
         self.countdown_start = None
         self.state = "menu"  # menu, countdown, playing, feedback, gameover
-        
-        # Load AI model
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.load_model(model_path)
+    
         
         # Buttons
         self.clear_button = pygame.Rect(50, 550, 100, 40)
         self.submit_button = pygame.Rect(200, 550, 100, 40)
         self.next_button = pygame.Rect(350, 550, 100, 40)
         self.play_button = pygame.Rect(window_size[0]//2 - 100, window_size[1]//2 + 50, 200, 50)
-        
-    def load_model(self, model_path):
-        """Load the pre-trained drawing recognition model"""
-        try:
-            saved_data = torch.load(model_path, map_location=self.device)
-            self.classes = saved_data["classes"]
-            self.image_size = saved_data["image_size"]
-            
-            # Set up model
-            self.model = DoodleCNN(input_size=28, num_classes=len(self.classes))
-            self.model.load_state_dict(saved_data["model"])
-            self.model.to(self.device)
-            self.model.eval()
-            
-            print(f"Model loaded successfully with {len(self.classes)} classes: {self.classes}")
-        except Exception as e:
-            print(f"Error loading model: {e}")
-            sys.exit(1)
+
+        # model
+        self.inferencer = DoodleInferencer(model_path = model_path)
+        self.classes = self.inferencer.getClasses()
     
     def select_challenge(self):
         """Select a random drawing challenge from available classes that hasn't been used yet"""
@@ -104,67 +88,15 @@ class QuickDrawGame:
     def clear_canvas(self):
         """Clear the drawing canvas"""
         self.canvas.fill(self.WHITE)
-
-    def preprocess_image(self):
-        # Convert canvas to grayscale
-        canvas_array = pygame.surfarray.array3d(self.canvas)
-        image = cv2.cvtColor(np.transpose(canvas_array, (1, 0, 2)), cv2.COLOR_RGB2GRAY)
-        image = 255 - image  # Invert: black bg, white fg
-
-        # Find contours
-        contours, _ = cv2.findContours(image, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        if len(contours) == 0:
-            raise ValueError("No object found in image.")
-
-        # Get largest contour
-        contour = max(contours, key=cv2.contourArea)
-        x, y, w, h = cv2.boundingRect(contour)
-        cropped = image[y:y+h, x:x+w]
-
-        # Make the bounding box is 75% of the self.image_size, others are padding
-        target_size = self.image_size * 0.75
-        if h > w:
-            new_h = target_size
-            new_w = int(w * (target_size / h))
-        else:
-            new_w = target_size
-            new_h = int(h * (target_size / w))
-        resized = cv2.resize(cropped, (new_w, new_h), interpolation=cv2.INTER_AREA)
-
-        # Add padding to make image of size self.image_size x self.image_size
-        pad_top = (self.image_size - new_h) // 2
-        pad_bottom = self.image_size - new_h - pad_top
-        pad_left = (self.image_size - new_w) // 2
-        pad_right = self.image_size - new_w - pad_left
-        padded = np.pad( resized, ((pad_top, pad_bottom), (pad_left, pad_right)), mode='constant', constant_values=0)
-
-        # Denoise and threshold
-        median = cv2.medianBlur(padded, 1)
-        gaussian = cv2.GaussianBlur(median, (3, 3), 0)
-        _, image_resized = cv2.threshold(gaussian, 128, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-
-        # Normalize and convert to tensor
-        image_resized = image_resized.astype(np.float32) / 255.0
-        tensor_image = torch.from_numpy(image_resized).unsqueeze(0).unsqueeze(0)
-
-        return tensor_image
         
     def process_drawing(self):
-        tensor_image = self.preprocess_image()
+        #read the image
+        image = pygame.surfarray.array3d(self.canvas)
+        image = np.transpose(image, (1, 0, 2))  # Convert to HxWxC
 
-        # Run inference
-        softmax = nn.Softmax(dim=1)
-        with torch.no_grad():
-            tensor_image = tensor_image.to(self.device)
-            output = self.model(tensor_image)
-            probs = softmax(output)
-
-            predicted_class_id = torch.argmax(probs, dim=1).item()
-            predicted_prob = probs[0][predicted_class_id].item()
-            predicted_class = self.classes[predicted_class_id]
-
-            return predicted_class, predicted_prob
         
+        return self.inferencer.inference(image)
+
     def draw_menu(self):
         """Draw the game menu screen"""
         self.screen.fill(self.WHITE)

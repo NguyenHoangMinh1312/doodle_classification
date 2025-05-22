@@ -13,6 +13,7 @@ Identify Hand-Drawn Illustrations
 - Python 3.10.12 or higher
 - NumPy 2.1.3 or higher
 - PyTorch 2.6.0 or higher
+- tensorflow 2.19.0 or higher
 - OpenCV 4.11.0.86 or higher
 - tqdm 4.67.1 or higher
 - scikit-learn 1.6.1 or higher
@@ -27,26 +28,32 @@ Identify Hand-Drawn Illustrations
 ```
 pip install torch
 ```
-2. Install NumPy (if not already installed):
+2. Install tensorflow (if not already installed):
+```
+pip install tensorflow
+```
+3. Install NumPy (if not already installed):
 ```
 pip install numpy
 ```
-3. Install OpenCV (if not already installed):
+4. Install OpenCV (if not already installed):
 ```
 pip install opencv-python
 ```
-4. Install tqdm (if not already installed):
+5. Install tqdm (if not already installed):
 ```
 pip install tqdm
 ```
-5. Install scikit-learn (if not already installed):
+6. Install scikit-learn (if not already installed):
 ```
 pip install scikit-learn
 ```
-6. Install pygame (if not already installed):
+7. Install pygame (if not already installed):
 ```
 pip install pygame
 ```
 
-7. Run `train.py` to train the model. You can modify hyperparameters in the `get_args()` function..
-8. Run `main.py` and enjoy the game!.
+8. Run `train.py` to train the model. Remember to check for parameters before running.
+9. Check for model path before running `main.py`
+9. Run `main.py` and enjoy the game!.
+
