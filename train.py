@@ -7,7 +7,7 @@ from model import DoodleCNN
 import torch.nn as nn
 from tqdm import tqdm
 from torch.utils.tensorboard import SummaryWriter
-from sklearn.metrics import f1_score, confusion_matrix
+from sklearn.metrics import f1_score, accuracy_score, confusion_matrix
 import shutil
 import matplotlib.pyplot as plt
 import numpy as np
@@ -93,7 +93,7 @@ class DoodleTrainer:
                                        batch_size = self.batch_size,
                                        shuffle = True,
                                        drop_last = True,
-                                       num_workers = os.cpu_count())
+                                       num_workers = int(os.cpu_count() / 2))
         self.test_set = Doodle(root_path = self.data_path,
                                mode = "test",
                                split_ratio = self.split_ratio,
@@ -102,7 +102,7 @@ class DoodleTrainer:
                                       batch_size = self.batch_size,
                                       shuffle = False,
                                       drop_last = False,
-                                      num_workers = os.cpu_count())
+                                      num_workers = int(os.cpu_count() / 2))
         
     def __setUpModel(self):
         self.model = DoodleCNN(input_size = self.img_size, num_classes = len(self.train_set.classes))
@@ -111,7 +111,7 @@ class DoodleTrainer:
         self.model.to(self.device)
         
     def __setUpCriterion(self):
-        self.criterion = nn.CrossEntropyLoss()
+        self.criterion = nn.CrossEntropyLoss(reduction = "none")
         
     def __setUpOptimizer(self):
         self.optimizer = torch.optim.AdamW(params = self.model.parameters(), lr = self.learning_rate)
@@ -121,10 +121,10 @@ class DoodleTrainer:
     def __setUpTrainingParameters(self):
         if self.resume_training:
             self.cur_epoch = self.saved_data["cur_epoch"] + 1
-            self.best_f1 = self.saved_data["best_f1"]
+            self.best_acc = self.saved_data["best_acc"]
             self.cur_patience = self.saved_data["cur_patience"]
         else:
-            self.best_f1 = 0    
+            self.best_acc = 0    
             self.cur_epoch = 0
             self.cur_patience = 0
     
@@ -150,18 +150,22 @@ class DoodleTrainer:
                 #forward pass
                 outputs = self.model(images)
                 loss = self.criterion(outputs, labels)
+                loss_mean = loss.mean()
+                loss_std = loss.std()
+                mask = loss < (loss_mean + 2 * loss_std)
+                if mask.sum() > 0:
+                    loss = loss[mask].mean()
+                    # backward and optimize as usual
+                    self.optimizer.zero_grad()
+                    loss.backward()
+                    self.optimizer.step()
 
-                #calculate loss
-                train_loss += loss.item()
-                avg_loss = train_loss/(iter + 1)
-                train_bar.set_description(f"Epoch [{epoch + 1}/{self.num_epochs}], Device:{self.device}, Loss:{avg_loss:.2f}")
-                self.writer.add_scalar("Train_loss", avg_loss, epoch * len(self.train_loader) + iter)
+                    #calculate avg loss
+                    train_loss += loss.item()
+                    avg_loss = train_loss/(iter + 1)
+                    train_bar.set_description(f"Epoch [{epoch + 1}/{self.num_epochs}], Device:{self.device}, Loss:{avg_loss:.2f}")
+                    self.writer.add_scalar("Train_loss", avg_loss, epoch * len(self.train_loader) + iter)
                 
-                #backward pass and optimization
-                self.optimizer.zero_grad()
-                loss.backward()
-                self.optimizer.step()
-
             #validation stage
             self.model.eval()
             val_loss = 0.0
@@ -179,7 +183,7 @@ class DoodleTrainer:
                     loss = self.criterion(outputs, labels)
 
                     #calculate loss
-                    val_loss += loss.item()
+                    val_loss += loss.mean().item()
                     avg_loss = val_loss/(iter + 1)
                     val_bar.set_description(f"Epoch [{epoch + 1}/{self.num_epochs}], Device:{self.device}, Loss:{avg_loss:.2f}")
                     self.writer.add_scalar("Val_loss", avg_loss, epoch * len(self.test_loader) + iter)
@@ -187,38 +191,41 @@ class DoodleTrainer:
                     #store the true and predicted labels
                     y_true.extend(labels.cpu().numpy())
                     y_pred.extend(torch.argmax(outputs, dim = 1).cpu().numpy())
-            #calculate the F1 score
-            f1 = f1_score(y_true, y_pred, average = "weighted")
-            print(f"f1_score: {f1:.2f}")
-            self.writer.add_scalar("Val_f1_score", f1, epoch)
+            # #calculate the F1 score
+            # f1 = f1_score(y_true, y_pred, average = "weighted")
+            # print(f"f1_score: {f1:.2f}")
+            accuracy = accuracy_score(y_true, y_pred)
+            print(f"accuracy: {accuracy:.2f}")
+            self.writer.add_scalar("Val_accuracy", accuracy, epoch)
 
             #plot confusion matrix
             cm = confusion_matrix(y_true, y_pred)
             self.plot_confusion_matrix(self.writer, cm, self.train_set.classes, epoch)
 
             #save the model if the validation F1 score is improved
-            if f1 > self.best_f1:
-                self.best_f1 = f1
+            if accuracy > self.best_acc:
+                self.best_acc = accuracy
                 self.cur_patience = 0
                 torch.save({
                     "model": self.model.state_dict(),
                     "optimizer": self.optimizer.state_dict(),
                     "cur_epoch": epoch,
-                    "best_f1": self.best_f1,
+                    "best_acc": self.best_acc,
                     "cur_patience": self.cur_patience,
                     "classes": self.train_set.classes,
                     "image_size": self.img_size
                 }, os.path.join(self.checkpoint_path, "best.pt"))
             else:
-                print(f"No improvements, patience: {self.cur_patience}/{self.patience}")
                 self.cur_patience += 1
+                print(f"No improvements, patience: {self.cur_patience}/{self.patience}")
+                
 
             #save the last model
             torch.save({
                 "model": self.model.state_dict(),
                 "optimizer": self.optimizer.state_dict(),
                 "cur_epoch": epoch,
-                "best_f1": self.best_f1,
+                "best_acc": self.best_acc,
                 "cur_patience": self.cur_patience,
                 "classes": self.train_set.classes,
                 "image_size": self.img_size
@@ -233,7 +240,7 @@ if __name__ == "__main__":
                             batch_size = 32, 
                             learning_rate = 1e-3, 
                             img_size = 28,
-                            resume_training = False, 
+                            resume_training = True, 
                             patience = 10, 
                             split_ratio = 0.8,
                             log_path = "./doodle_classification/tensorboard", 
