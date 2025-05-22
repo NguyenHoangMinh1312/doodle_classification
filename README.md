@@ -55,7 +55,7 @@ pip install pygame
 
 8. Run `train.py` to train the model. Remember to check for parameters before running.
 9. Check for model path before running `main.py`
-9. Run `main.py` and enjoy the game!.
+10. Run `main.py` and enjoy the game!.
 
 ### Demo video
-[Watch the demo video](./doodle_classification_vid.mp4)
+[Watch the demo video](./doodle_classification_vid.gif)
