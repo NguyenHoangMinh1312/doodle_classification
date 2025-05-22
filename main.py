@@ -48,7 +48,7 @@ class QuickDrawGame:
         # Game state
         self.current_challenge = None
         self.used_challenges = []  # Track used challenges to avoid repetition
-        self.time_limit = 20  # seconds
+        self.time_limit = 30  # seconds
         self.start_time = None
         self.score = 0
         self.rounds_played = 0
@@ -62,10 +62,15 @@ class QuickDrawGame:
     
         
         # Buttons
-        self.clear_button = pygame.Rect(50, 550, 100, 40)
-        self.submit_button = pygame.Rect(200, 550, 100, 40)
-        self.next_button = pygame.Rect(350, 550, 100, 40)
+        # Buttons
+        self.clear_button = pygame.Rect(50, 530, 100, 40)
+        self.eraser_button = pygame.Rect(250, 530, 100, 40)  # New eraser button
+        self.submit_button = pygame.Rect(450, 530, 100, 40)
+        self.next_button = pygame.Rect(350, 530, 100, 40)
         self.play_button = pygame.Rect(window_size[0]//2 - 100, window_size[1]//2 + 50, 200, 50)
+
+        # Drawing tool state
+        self.using_eraser = False
 
         # model
         self.inferencer = DoodleInferencer(model_path = model_path)
@@ -178,14 +183,18 @@ class QuickDrawGame:
         # Draw buttons
         pygame.draw.rect(self.screen, self.GRAY, self.clear_button, border_radius=5)
         pygame.draw.rect(self.screen, self.BLUE, self.submit_button, border_radius=5)
-        
+        pygame.draw.rect(self.screen, self.GRAY if not self.using_eraser else self.GREEN, self.eraser_button, border_radius=5)  # Eraser button
+
         clear_text = self.small_font.render("Clear", True, self.BLACK)
         submit_text = self.small_font.render("Submit", True, self.WHITE)
-        
+        eraser_text = self.small_font.render("Eraser", True, self.BLACK if not self.using_eraser else self.WHITE)
+
         self.screen.blit(clear_text, (self.clear_button.centerx - clear_text.get_width()//2, 
                                      self.clear_button.centery - clear_text.get_height()//2))
         self.screen.blit(submit_text, (self.submit_button.centerx - submit_text.get_width()//2, 
                                       self.submit_button.centery - submit_text.get_height()//2))
+        self.screen.blit(eraser_text, (self.eraser_button.centerx - eraser_text.get_width()//2,
+                                       self.eraser_button.centery - eraser_text.get_height()//2))
         
         # Check if time is up
         if time_left <= 0:
@@ -275,15 +284,16 @@ class QuickDrawGame:
                             self.reset_game()
                     
                     elif self.state == "playing":
-                        if self.drawing_area.collidepoint(mouse_pos):
+                        if self.eraser_button.collidepoint(mouse_pos):
+                            self.using_eraser = not self.using_eraser  # Toggle eraser
+                        elif self.drawing_area.collidepoint(mouse_pos):
                             self.drawing = True
-                            # Convert global mouse position to canvas coordinates
                             canvas_pos = (mouse_pos[0] - self.drawing_area.x, 
                                          mouse_pos[1] - self.drawing_area.y)
                             self.last_pos = canvas_pos
-                            # Draw a single circle at the first click position
+                            color = self.WHITE if self.using_eraser else self.BLACK
                             pygame.gfxdraw.filled_circle(self.canvas, canvas_pos[0], canvas_pos[1], 
-                                                      self.radius, self.BLACK)
+                                                      self.radius, color)
                         elif self.clear_button.collidepoint(mouse_pos):
                             self.clear_canvas()
                         elif self.submit_button.collidepoint(mouse_pos):
@@ -301,17 +311,13 @@ class QuickDrawGame:
                 
                 elif event.type == pygame.MOUSEMOTION and self.drawing:
                     if self.drawing_area.collidepoint(event.pos):
-                        # Convert global mouse position to canvas coordinates
                         canvas_pos = (event.pos[0] - self.drawing_area.x, 
                                      event.pos[1] - self.drawing_area.y)
-                        
+                        color = self.WHITE if self.using_eraser else self.BLACK
                         if self.last_pos:
-                            # Draw a line between the last position and current position
-                            pygame.draw.line(self.canvas, self.BLACK, self.last_pos, canvas_pos, self.radius * 2)
-                            # Draw a circle at the current position to smoothen the line
+                            pygame.draw.line(self.canvas, color, self.last_pos, canvas_pos, self.radius * 2)
                             pygame.gfxdraw.filled_circle(self.canvas, canvas_pos[0], canvas_pos[1], 
-                                                      self.radius, self.BLACK)
-                        
+                                                      self.radius, color)
                         self.last_pos = canvas_pos
             
             # Update display based on current state
