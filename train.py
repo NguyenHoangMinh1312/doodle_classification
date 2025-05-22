@@ -4,7 +4,7 @@ from argparse import ArgumentParser
 import torch
 import os
 from torch.utils.data import DataLoader
-from torchvision.models import resnet18, ResNet18_Weights
+from model import DoodleCNN
 import torch.nn as nn
 from tqdm import tqdm
 from torch.utils.tensorboard import SummaryWriter
@@ -19,14 +19,13 @@ def get_args():
 
     parser.add_argument("--num_epochs", "-ne", type = int, default = 100, help = "Number of epochs")
     parser.add_argument("--batch_size", "-bs", type = int, default = 32, help = "Number of images in a batch")
-    parser.add_argument("--learning_rate", "-lr", type = float, default = 1e-4, help = "learning rate")
+    parser.add_argument("--learning_rate", "-lr", type = float, default = 1e-3, help = "learning rate")
     parser.add_argument("--log_path", "-lp", type = str, default = "./doodle_classification/tensorboard", help = "place to save the tensorboard")
     parser.add_argument("--checkpoint_path", "-cp", type = str, default = "./doodle_classification/checkpoint", help = "place to save the model")
-    parser.add_argument("--data_path", "-dp", type = str, default = "./datasets/doodle", help = "path to the dataset")  
-    parser.add_argument("--img_size", "-is", type = int, default = 224, help = "image size (i x i) to crop")
-    parser.add_argument("--resume_training", "-rt", type = bool, default = True, help = "continue training from previous epoch or not")
+    parser.add_argument("--data_path", "-dp", type = str, default = "./datasets/doodles", help = "path to the dataset")  
+    parser.add_argument("--img_size", "-is", type = int, default = 28, help = "image size (i x i) to crop")
+    parser.add_argument("--resume_training", "-rt", type = bool, default = False, help = "continue training from previous epoch or not")
     parser.add_argument("--patience", "-p", type = int, default = 10, help ="Maximum number of consecutive epochs without improvements")
-    parser.add_argument("--image_to_take_ratio", "-ittr", type = float, default = 0.3, help = "Ratio of images per class taken from the dataset")
     parser.add_argument("--split_ratio", "-sr", type = float, default = 0.8, help = "ratio of the data used for training")
     return parser.parse_args()
 
@@ -81,32 +80,33 @@ def train(args):
     
     #preprocess the data
     train_set = Doodle(root_path = args.data_path,
-                            mode = "train",
-                            split_ratio = args.split_ratio,
-                            image_to_take_ratio= args.image_to_take_ratio)
+                        mode = "train",
+                        split_ratio = args.split_ratio,
+                        image_size = args.img_size) 
     train_loader = DataLoader(train_set,
                               batch_size = args.batch_size,
                               shuffle = True,
                               drop_last = True,
                               num_workers = 8)
     test_set = Doodle(root_path = args.data_path,
-                            mode = "test",
-                            split_ratio = args.split_ratio,
-                            image_to_take_ratio= args.image_to_take_ratio)
+                      mode = "test",
+                      split_ratio = args.split_ratio,
+                      image_size = args.img_size)
     test_loader = DataLoader(test_set,
                              batch_size = args.batch_size,
                              shuffle = False,
                              drop_last = False,
                              num_workers = 8)
 
-    model = resnet18(weights=ResNet18_Weights.IMAGENET1K_V1)
-    model.conv1 = nn.Conv2d(1, 64, kernel_size=(7, 7), stride=(2, 2), padding=(3, 3), bias=False)
-    model.fc = nn.Linear(in_features=512, out_features = len(train_set.classes), bias=True)
+    #model initialization
+    model = DoodleCNN(input_size = args.img_size, num_classes = len(train_set.classes))
     model.to(device)
 
+    #criterion and optimizer
     criterion = nn.CrossEntropyLoss()
     optimizer = torch.optim.AdamW(params = model.parameters(), lr = args.learning_rate)
-        
+    
+    #load the model
     if args.resume_training:
         checkpoint = os.path.join(args.checkpoint_path, "last.pt")
         saved_data = torch.load(checkpoint, weights_only = False)
@@ -120,6 +120,7 @@ def train(args):
         cur_epoch = 0
         cur_patience = 0
 
+    #training
     for epoch in range(cur_epoch, args.num_epochs):
         #training stage
         total_loss = 0
@@ -145,7 +146,7 @@ def train(args):
             loss.backward()
             optimizer.step()
         
-        #validtion
+        #validtion stage
         model.eval()
         total_loss = 0
         progress_bar = tqdm(test_loader, colour = "yellow")
@@ -185,7 +186,8 @@ def train(args):
                 "cur_epoch": epoch,
                 "cur_patience": 0,
                 "best_f1": f1,
-                "classes": train_set.classes
+                "classes": train_set.classes,
+                "image_size": args.img_size
             }
             checkpoint  = os.path.join(args.checkpoint_path, "best.pt")
             torch.save(saved_data, checkpoint)
@@ -198,7 +200,8 @@ def train(args):
             "cur_epoch": epoch,
             "cur_patience": cur_patience,
             "best_f1": f1,
-            "categories": train_set.classes
+            "categories": train_set.classes,
+            "image_size": args.img_size
         }
         checkpoint  = os.path.join(args.checkpoint_path, "last.pt")
         torch.save(saved_data, checkpoint)

@@ -6,7 +6,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 import cv2
-from torchvision.models import resnet18
+from model import DoodleCNN
 import time
 
 class QuickDrawGame:
@@ -26,7 +26,7 @@ class QuickDrawGame:
         self.small_font = pygame.font.SysFont('Arial', 18)
         
         # Drawing area
-        self.drawing_area = pygame.Rect(50, 150, 700, 300)
+        self.drawing_area = pygame.Rect(50, 100, 700, 400)
         
         # Colors
         self.WHITE = (255, 255, 255)
@@ -64,9 +64,9 @@ class QuickDrawGame:
         self.load_model(model_path)
         
         # Buttons
-        self.clear_button = pygame.Rect(50, 520, 100, 40)
-        self.submit_button = pygame.Rect(200, 520, 100, 40)
-        self.next_button = pygame.Rect(350, 520, 100, 40)
+        self.clear_button = pygame.Rect(50, 550, 100, 40)
+        self.submit_button = pygame.Rect(200, 550, 100, 40)
+        self.next_button = pygame.Rect(350, 550, 100, 40)
         self.play_button = pygame.Rect(window_size[0]//2 - 100, window_size[1]//2 + 50, 200, 50)
         
     def load_model(self, model_path):
@@ -74,11 +74,10 @@ class QuickDrawGame:
         try:
             saved_data = torch.load(model_path, map_location=self.device)
             self.classes = saved_data["classes"]
+            self.image_size = saved_data["image_size"]
             
             # Set up model
-            self.model = resnet18(weights=None)
-            self.model.fc = nn.Linear(self.model.fc.in_features, len(self.classes))
-            self.model.conv1 = nn.Conv2d(1, 64, kernel_size=(7, 7), stride=(2, 2), padding=(3, 3), bias=False)
+            self.model = DoodleCNN(input_size=28, num_classes=len(self.classes))
             self.model.load_state_dict(saved_data["model"])
             self.model.to(self.device)
             self.model.eval()
@@ -105,37 +104,67 @@ class QuickDrawGame:
     def clear_canvas(self):
         """Clear the drawing canvas"""
         self.canvas.fill(self.WHITE)
+
+    def preprocess_image(self):
+        # Convert canvas to grayscale
+        canvas_array = pygame.surfarray.array3d(self.canvas)
+        image = cv2.cvtColor(np.transpose(canvas_array, (1, 0, 2)), cv2.COLOR_RGB2GRAY)
+        image = 255 - image  # Invert: black bg, white fg
+
+        # Find contours
+        contours, _ = cv2.findContours(image, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        if len(contours) == 0:
+            raise ValueError("No object found in image.")
+
+        # Get largest contour
+        contour = max(contours, key=cv2.contourArea)
+        x, y, w, h = cv2.boundingRect(contour)
+        cropped = image[y:y+h, x:x+w]
+
+        # Make the bounding box is 75% of the self.image_size, others are padding
+        target_size = self.image_size * 0.75
+        if h > w:
+            new_h = target_size
+            new_w = int(w * (target_size / h))
+        else:
+            new_w = target_size
+            new_h = int(h * (target_size / w))
+        resized = cv2.resize(cropped, (new_w, new_h), interpolation=cv2.INTER_AREA)
+
+        # Add padding to make image of size self.image_size x self.image_size
+        pad_top = (self.image_size - new_h) // 2
+        pad_bottom = self.image_size - new_h - pad_top
+        pad_left = (self.image_size - new_w) // 2
+        pad_right = self.image_size - new_w - pad_left
+        padded = np.pad( resized, ((pad_top, pad_bottom), (pad_left, pad_right)), mode='constant', constant_values=0)
+
+        # Denoise and threshold
+        median = cv2.medianBlur(padded, 1)
+        gaussian = cv2.GaussianBlur(median, (3, 3), 0)
+        _, image_resized = cv2.threshold(gaussian, 128, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+
+        # Normalize and convert to tensor
+        image_resized = image_resized.astype(np.float32) / 255.0
+        tensor_image = torch.from_numpy(image_resized).unsqueeze(0).unsqueeze(0)
+
+        return tensor_image
         
     def process_drawing(self):
-        """Process the current drawing and run inference with the model"""
-        # Get the canvas as a NumPy array
-        canvas_array = pygame.surfarray.array3d(self.canvas)
-        # Convert to grayscale
-        gray = cv2.cvtColor(canvas_array.transpose(1, 0, 2), cv2.COLOR_RGB2GRAY)
-        
-        # Check if drawing is empty (all white)
-        if np.mean(gray) > 250:
-            return None, "Please draw something!"
-        
-        # Process image for model
-        image = cv2.resize(gray, (224, 224))
-        image = 255 - image  # Invert to match training data (black on white)
-        image = image.astype(np.float32) / 255.0
-        image_tensor = torch.from_numpy(image).float().unsqueeze(0).unsqueeze(0)  # Add batch and channel dimensions
-        
+        tensor_image = self.preprocess_image()
+
         # Run inference
         softmax = nn.Softmax(dim=1)
         with torch.no_grad():
-            image_tensor = image_tensor.to(self.device)
-            output = self.model(image_tensor)
+            tensor_image = tensor_image.to(self.device)
+            output = self.model(tensor_image)
             probs = softmax(output)
-            
+
             predicted_class_id = torch.argmax(probs, dim=1).item()
             predicted_prob = probs[0][predicted_class_id].item()
             predicted_class = self.classes[predicted_class_id]
-            
+
             return predicted_class, predicted_prob
-    
+        
     def draw_menu(self):
         """Draw the game menu screen"""
         self.screen.fill(self.WHITE)
