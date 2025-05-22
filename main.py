@@ -41,7 +41,7 @@ class QuickDrawGame:
         # Drawing variables
         self.drawing = False
         self.last_pos = None
-        self.radius = 5
+        self.radius = 6
         self.canvas = pygame.Surface((self.drawing_area.width, self.drawing_area.height))
         self.canvas.fill(self.WHITE)
         

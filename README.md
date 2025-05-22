@@ -57,3 +57,5 @@ pip install pygame
 9. Check for model path before running `main.py`
 9. Run `main.py` and enjoy the game!.
 
+### Demo video
+[Watch the demo video](./doodle_classification_vid.mp4)

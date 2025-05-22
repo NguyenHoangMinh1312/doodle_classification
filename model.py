@@ -3,7 +3,7 @@ import torch.nn as nn
 from math import pow
 
 class DoodleCNN(nn.Module):
-    def __init__(self, input_size = 28, num_classes = 15):
+    def __init__(self, num_classes, input_size = 28):
         super(DoodleCNN, self).__init__()
         self.num_classes = num_classes
         self.conv1 = nn.Sequential(nn.Conv2d(1, 32, 5, bias=False), nn.ReLU(inplace=True), nn.MaxPool2d(2,2))
