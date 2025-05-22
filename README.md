@@ -58,4 +58,4 @@ pip install pygame
 10. Run `main.py` and enjoy the game!.
 
 ### Demo video
-![Demo video](./doodle_classification_vid.mp4)
+[Demo video](./doodle_classification_vid.mp4)
