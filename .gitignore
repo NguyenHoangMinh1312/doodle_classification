@@ -2,6 +2,5 @@
 /tensorboard
 /__pycache__
 /ML.py
-/inference.py
 /test_img
 /tempCodeRunnerFile.py
